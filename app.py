@@ -16,22 +16,48 @@ import signal
 import sys
 from types import FrameType
 
-from flask import Flask
+from flask import Flask, request, jsonify
+
+# Add imports for Vertex AI Matching Engine
+from google.cloud import aiplatform_v1
 
 from utils.logging import logger
+from config import API_ENDPOINT, INDEX_ENDPOINT, DEPLOYED_INDEX_ID
+
+# Configure Vector Search client
+vector_search_client = aiplatform_v1.MatchServiceClient(client_options={"api_endpoint": API_ENDPOINT})
 
 app = Flask(__name__)
 
+@app.route("/wines", methods=["POST"])
+def get_wine_neighbors():
+    data = request.get_json()
+    if not data or "vector" not in data:
+        return jsonify({"error": "Missing 'vector' in request body."}), 400
+    try:
+        wine_vector = [float(x) for x in data["vector"]]
+    except Exception:
+        return jsonify({"error": "Invalid vector format. Provide a list of numbers."}), 400
 
-@app.route("/")
-def hello() -> str:
-    # Use basic logging with custom fields
-    logger.info(logField="custom-entry", arbitraryField="custom-entry")
-
-    # https://cloud.google.com/run/docs/logging#correlate-logs
-    logger.info("Child logger with trace Id.")
-
-    return "Hello, World!"
+    # Build FindNeighborsRequest object
+    datapoint = aiplatform_v1.IndexDatapoint(feature_vector=wine_vector)
+    query = aiplatform_v1.FindNeighborsRequest.Query(datapoint=datapoint, neighbor_count=10)
+    request_obj = aiplatform_v1.FindNeighborsRequest(
+        index_endpoint=INDEX_ENDPOINT,
+        deployed_index_id=DEPLOYED_INDEX_ID,
+        queries=[query],
+        return_full_datapoint=False,
+    )
+    try:
+        response = vector_search_client.find_neighbors(request_obj)
+        wine_neighbors = []
+        for neighbor in response.nearest_neighbors[0].neighbors:
+            wine_neighbors.append({
+                "wine_id": neighbor.datapoint.datapoint_id,
+            })
+        return jsonify({"neighbors": wine_neighbors})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 def shutdown_handler(signal_int: int, frame: FrameType) -> None:

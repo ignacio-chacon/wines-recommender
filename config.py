@@ -1,0 +1,3 @@
+API_ENDPOINT = "1759372960.us-central1-438750044055.vdb.vertexai.goog"
+INDEX_ENDPOINT = "projects/438750044055/locations/us-central1/indexEndpoints/4128272537136136192"
+DEPLOYED_INDEX_ID = "wines_1757376402677"
