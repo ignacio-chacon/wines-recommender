@@ -21,6 +21,8 @@ from flask import Flask, request, jsonify
 # Add imports for Vertex AI Matching Engine
 from google.cloud import aiplatform_v1
 
+import jsonschema
+
 from utils.logging import logger
 from config import API_ENDPOINT, INDEX_ENDPOINT, DEPLOYED_INDEX_ID
 
@@ -29,15 +31,60 @@ vector_search_client = aiplatform_v1.MatchServiceClient(client_options={"api_end
 
 app = Flask(__name__)
 
+SCHEMA = {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["Red", "White", "Rose", "Sparkling"]
+    },
+    "body": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "dryness": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "abv": {
+      "type": "number"
+    }
+  },
+  "required": ["type", "body", "dryness", "abv"],
+}
+
+def parse_wine_vector(data):
+    try:
+        jsonschema.validate(instance=data, schema=SCHEMA)
+        wine_type = data["type"].lower()
+        is_rose = 1 if wine_type == "rose" else 0
+        is_sparkling = 1 if wine_type == "sparkling" else 0
+        is_white = 1 if wine_type == "white" else 0
+        return [
+            int(data["body"]),
+            float(data["abv"]),
+            is_rose,
+            is_sparkling,
+            is_white,
+            int(data["dryness"])
+        ]
+    except jsonschema.ValidationError as ve:
+        raise ValueError(f"Schema validation error: {ve.message}")
+    except Exception as e:
+        raise ValueError(f"Invalid input: {str(e)}")
+
 @app.route("/wines", methods=["POST"])
 def get_wine_neighbors():
     data = request.get_json()
-    if not data or "vector" not in data:
-        return jsonify({"error": "Missing 'vector' in request body."}), 400
+    if not data:
+        return jsonify({"error": "Missing request body."}), 400
     try:
-        wine_vector = [float(x) for x in data["vector"]]
-    except Exception:
-        return jsonify({"error": "Invalid vector format. Provide a list of numbers."}), 400
+        wine_vector = parse_wine_vector(data)
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
 
     # Build FindNeighborsRequest object
     datapoint = aiplatform_v1.IndexDatapoint(feature_vector=wine_vector)
@@ -52,10 +99,8 @@ def get_wine_neighbors():
         response = vector_search_client.find_neighbors(request_obj)
         wine_neighbors = []
         for neighbor in response.nearest_neighbors[0].neighbors:
-            wine_neighbors.append({
-                "wine_id": neighbor.datapoint.datapoint_id,
-            })
-        return jsonify({"neighbors": wine_neighbors})
+            wine_neighbors.append(neighbor.datapoint.datapoint_id)
+        return jsonify(wine_neighbors)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
