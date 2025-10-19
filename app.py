@@ -98,9 +98,31 @@ def get_wine_neighbors():
     try:
         response = vector_search_client.find_neighbors(request_obj)
         wine_neighbors = []
+        distances = []
+        
+        # Collect all neighbors and distances
         for neighbor in response.nearest_neighbors[0].neighbors:
-            wine_neighbors.append(neighbor.datapoint.datapoint_id)
-        return jsonify(wine_neighbors)
+            datapoint_id = neighbor.datapoint.datapoint_id
+            wine_neighbors.append(datapoint_id)
+            distances.append(neighbor.distance)
+        
+        # Normalize distances to 0-1 scores using min-max normalization
+        # Higher dot product = more similar, so we want higher scores for higher distances
+        if distances:
+            min_dist = min(distances)
+            max_dist = max(distances)
+            scores = {}
+            if max_dist > min_dist:
+                for wine_id, dist in zip(wine_neighbors, distances):
+                    scores[wine_id] = (dist - min_dist) / (max_dist - min_dist)
+            else:
+                # All distances are the same
+                for wine_id in wine_neighbors:
+                    scores[wine_id] = 1.0
+        else:
+            scores = {}
+            
+        return jsonify({"neighbors": wine_neighbors, "scores": scores})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
