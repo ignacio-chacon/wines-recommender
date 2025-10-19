@@ -122,7 +122,7 @@ def get_wine_neighbors():
         else:
             scores = {}
             
-        return jsonify({"neighbors": wine_neighbors, "scores": scores})
+        return jsonify({"wines": wine_neighbors, "scores": scores})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
