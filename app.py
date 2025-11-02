@@ -20,6 +20,7 @@ from flask import Flask, request, jsonify
 
 # Add imports for Vertex AI Matching Engine
 from google.cloud import aiplatform_v1
+from google.cloud import vision
 
 import jsonschema
 
@@ -126,6 +127,42 @@ def get_wine_neighbors():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/ocr", methods=["POST"])
+def extract_text_from_image():
+    # Check if image is in request
+    if 'image' not in request.files:
+        return jsonify({"error": "No image file provided"}), 400
+    
+    image_file = request.files['image']
+    if image_file.filename == '':
+        return jsonify({"error": "No image file selected"}), 400
+    
+    try:
+        # Initialize Vision client
+        vision_client = vision.ImageAnnotatorClient()
+        
+        # Read image content
+        image_content = image_file.read()
+        
+        # Create Vision API image object
+        image = vision.Image(content=image_content)
+        
+        # Perform text detection
+        response = vision_client.text_detection(image=image)
+        texts = response.text_annotations
+        
+        if response.error.message:
+            raise Exception(f'Vision API error: {response.error.message}')
+        
+        # Extract full text (first annotation contains all text)
+        if texts:
+            extracted_text = texts[0].description
+            return jsonify({"text": extracted_text})
+        else:
+            return jsonify({"text": ""})
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 def shutdown_handler(signal_int: int, frame: FrameType) -> None:
     logger.info(f"Caught Signal {signal.strsignal(signal_int)}")
