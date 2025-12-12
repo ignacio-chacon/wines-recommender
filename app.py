@@ -12,157 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import signal
 import sys
+import signal
 from types import FrameType
 
-from flask import Flask, request, jsonify
-
-# Add imports for Vertex AI Matching Engine
-from google.cloud import aiplatform_v1
-from google.cloud import vision
-
-import jsonschema
-
+from app_factory import create_app
 from utils.logging import logger
-from config import API_ENDPOINT, INDEX_ENDPOINT, DEPLOYED_INDEX_ID
+import config
 
-# Configure Vector Search client
-vector_search_client = aiplatform_v1.MatchServiceClient(client_options={"api_endpoint": API_ENDPOINT})
-
-app = Flask(__name__)
-
-SCHEMA = {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "properties": {
-    "type": {
-      "type": "string",
-      "enum": ["Red", "White", "Rose", "Sparkling"]
-    },
-    "body": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 5
-    },
-    "dryness": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 5
-    },
-    "abv": {
-      "type": "number"
-    }
-  },
-  "required": ["type", "body", "dryness", "abv"],
-}
-
-def parse_wine_vector(data):
-    try:
-        jsonschema.validate(instance=data, schema=SCHEMA)
-        wine_type = data["type"].lower()
-        is_rose = 1 if wine_type == "rose" else 0
-        is_sparkling = 1 if wine_type == "sparkling" else 0
-        is_white = 1 if wine_type == "white" else 0
-        return [
-            int(data["body"]),
-            float(data["abv"]),
-            is_rose,
-            is_sparkling,
-            is_white,
-            int(data["dryness"])
-        ]
-    except jsonschema.ValidationError as ve:
-        raise ValueError(f"Schema validation error: {ve.message}")
-    except Exception as e:
-        raise ValueError(f"Invalid input: {str(e)}")
-
-@app.route("/wines", methods=["POST"])
-def get_wine_neighbors():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Missing request body."}), 400
-    try:
-        wine_vector = parse_wine_vector(data)
-    except ValueError as ve:
-        return jsonify({"error": str(ve)}), 400
-
-    # Build FindNeighborsRequest object
-    datapoint = aiplatform_v1.IndexDatapoint(feature_vector=wine_vector)
-    query = aiplatform_v1.FindNeighborsRequest.Query(datapoint=datapoint, neighbor_count=10)
-    request_obj = aiplatform_v1.FindNeighborsRequest(
-        index_endpoint=INDEX_ENDPOINT,
-        deployed_index_id=DEPLOYED_INDEX_ID,
-        queries=[query],
-        return_full_datapoint=False,
-    )
-    try:
-        response = vector_search_client.find_neighbors(request_obj)
-        wine_neighbors = []
-        distances = []
-        
-        # Collect all neighbors and distances
-        for neighbor in response.nearest_neighbors[0].neighbors:
-            datapoint_id = neighbor.datapoint.datapoint_id
-            wine_neighbors.append(datapoint_id)
-            distances.append(neighbor.distance)
-        
-        # Normalize distances to 0-1 scores using min-max normalization
-        # Higher dot product = more similar, so we want higher scores for higher distances
-        if distances:
-            min_dist = min(distances)
-            max_dist = max(distances)
-            scores = {}
-            if max_dist > min_dist:
-                for wine_id, dist in zip(wine_neighbors, distances):
-                    scores[wine_id] = (dist - min_dist) / (max_dist - min_dist)
-            else:
-                # All distances are the same
-                for wine_id in wine_neighbors:
-                    scores[wine_id] = 1.0
-        else:
-            scores = {}
-            
-        return jsonify({"wines": wine_neighbors, "scores": scores})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/ocr", methods=["POST"])
-def extract_text_from_image():
-    # Check if image is in request
-    if 'image' not in request.files:
-        return jsonify({"error": "No image file provided"}), 400
-    
-    image_file = request.files['image']
-    if image_file.filename == '':
-        return jsonify({"error": "No image file selected"}), 400
-    
-    try:
-        # Initialize Vision client
-        vision_client = vision.ImageAnnotatorClient()
-        
-        # Read image content
-        image_content = image_file.read()
-        
-        # Create Vision API image object
-        image = vision.Image(content=image_content)
-        
-        # Perform text detection
-        response = vision_client.text_detection(image=image)
-        texts = response.text_annotations
-        
-        if response.error.message:
-            raise Exception(f'Vision API error: {response.error.message}')
-        
-        # Extract full text (first annotation contains all text)
-        if texts:
-            extracted_text = texts[0].description
-            return jsonify({"text": extracted_text})
-        else:
-            return jsonify({"text": ""})
-            
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+# Create the Flask application using the factory pattern
+app = create_app()
 
 def shutdown_handler(signal_int: int, frame: FrameType) -> None:
     logger.info(f"Caught Signal {signal.strsignal(signal_int)}")
