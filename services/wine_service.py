@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, TYPE_CHECKING
 import jsonschema
 from google.cloud import aiplatform_v1
 
 from schemas import WINE_SCHEMA, WINE_QUERY_SCHEMA
 from config import INDEX_ENDPOINT, DEPLOYED_INDEX_ID
 from utils.logging import logger
+
+if TYPE_CHECKING:
+    from services.model_service import ModelService
 
 
 class WineService:
