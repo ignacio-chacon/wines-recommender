@@ -28,9 +28,44 @@ def create_wine_routes(wine_service: WineService):
     """
     
     @wine_bp.route("", methods=["POST"])
-    def get_wine_neighbors():
+    @wine_bp.route("/recommend", methods=["POST"])
+    def get_wine_recommendations():
         """
-        Find similar wines based on provided wine characteristics.
+        Get wine recommendations based on user preferences using the Two Tower Model.
+        
+        Request body should contain:
+        - type: Wine type preference (Red, White, Rose, Sparkling)
+        - body: Body preference score (1-5)
+        - dryness: Dryness preference score (1-5)
+        - abv: Alcohol by volume preference
+        
+        Returns:
+            JSON response with wine IDs and similarity scores
+        """
+        data = request.get_json()
+        if not data:
+            logger.warning("Wine recommendation request missing body")
+            return jsonify({"error": "Missing request body."}), 400
+        
+        try:
+            # Use the Two Tower Model approach
+            wine_ids, scores = wine_service.get_wine_recommendations(data)
+            logger.info("Wine recommendations generated", extra={"count": len(wine_ids)})
+            return jsonify({"wines": wine_ids, "scores": scores})
+        except ValueError as ve:
+            logger.error("User preferences validation failed", extra={"error": str(ve)})
+            return jsonify({"error": str(ve)}), 400
+        except Exception as e:
+            logger.error("Wine recommendation failed", extra={"error": str(e)})
+            return jsonify({"error": str(e)}), 500
+    
+    @wine_bp.route("/legacy", methods=["POST"])
+    def get_wine_neighbors_legacy():
+        """
+        [DEPRECATED] Find similar wines using legacy direct vector conversion.
+        
+        This endpoint is kept for backward compatibility but should not be used
+        for new implementations. Use /wines or /wines/recommend instead.
         
         Request body should contain:
         - type: Wine type (Red, White, Rose, Sparkling)
@@ -48,14 +83,14 @@ def create_wine_routes(wine_service: WineService):
         
         try:
             wine_vector = wine_service.parse_wine_vector(data)
-            logger.info("Wine vector parsed successfully", extra={"vector_length": len(wine_vector)})
+            logger.info("Wine vector parsed successfully (legacy)", extra={"vector_length": len(wine_vector)})
         except ValueError as ve:
             logger.error("Wine vector validation failed", extra={"error": str(ve)})
             return jsonify({"error": str(ve)}), 400
         
         try:
             wine_neighbors, scores = wine_service.find_similar_wines(wine_vector)
-            logger.info("Wine neighbors found", extra={"count": len(wine_neighbors)})
+            logger.info("Wine neighbors found (legacy)", extra={"count": len(wine_neighbors)})
             return jsonify({"wines": wine_neighbors, "scores": scores})
         except Exception as e:
             logger.error("Wine search failed", extra={"error": str(e)})

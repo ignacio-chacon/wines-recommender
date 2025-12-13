@@ -16,7 +16,7 @@ from flask import Flask
 from google.cloud import aiplatform_v1
 
 import config
-from services import WineService, OCRService
+from services import WineService, OCRService, ModelService
 from routes.wine_routes import create_wine_routes
 from routes.ocr_routes import create_ocr_routes
 from utils.logging import logger
@@ -42,10 +42,24 @@ def create_app() -> Flask:
     )
     logger.info("Vector Search client initialized", extra={"api_endpoint": config.API_ENDPOINT})
     
+    # Initialize Model Service for Two Tower Model
+    model_service = None
+    if config.MODEL_ENDPOINT or config.MODEL_ENDPOINT_ID:
+        try:
+            model_service = ModelService()
+            logger.info("Model service initialized for Two Tower Model")
+        except Exception as e:
+            logger.warning(
+                "Failed to initialize Model service, will use legacy mode",
+                extra={"error": str(e)}
+            )
+    else:
+        logger.info("Model endpoint not configured, running in legacy mode")
+    
     # Initialize services
-    wine_service = WineService(vector_search_client)
+    wine_service = WineService(vector_search_client, model_service)
     ocr_service = OCRService()
-    logger.info("Services initialized")
+    logger.info("Services initialized", extra={"model_enabled": model_service is not None})
     
     # Register blueprints with dependency injection
     app.register_blueprint(create_wine_routes(wine_service))

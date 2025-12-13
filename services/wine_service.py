@@ -12,29 +12,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import jsonschema
 from google.cloud import aiplatform_v1
 
-from schemas import WINE_SCHEMA
+from schemas import WINE_SCHEMA, WINE_QUERY_SCHEMA
 from config import INDEX_ENDPOINT, DEPLOYED_INDEX_ID
+from utils.logging import logger
 
 
 class WineService:
-    """Service for wine vector search and recommendation."""
+    """Service for wine vector search and recommendation using pre-calculated wine embeddings."""
     
-    def __init__(self, vector_search_client: aiplatform_v1.MatchServiceClient):
+    def __init__(
+        self, 
+        vector_search_client: aiplatform_v1.MatchServiceClient,
+        model_service: Optional['ModelService'] = None
+    ):
         """
         Initialize the wine service.
         
         Args:
             vector_search_client: Initialized Vertex AI Match Service client
+            model_service: Optional ModelService for generating user embeddings
         """
         self.vector_search_client = vector_search_client
+        self.model_service = model_service
+        logger.info("WineService initialized", extra={"has_model_service": model_service is not None})
     
     def parse_wine_vector(self, data: Dict) -> List[float]:
         """
         Parse and validate wine data, converting it to a feature vector.
+        
+        DEPRECATED: This method is kept for backward compatibility.
+        The new architecture uses user embeddings from the Two Tower Model.
         
         Args:
             data: Dictionary containing wine properties
@@ -46,7 +57,7 @@ class WineService:
             ValueError: If validation fails or data is invalid
         """
         try:
-            jsonschema.validate(instance=data, schema=WINE_SCHEMA)
+            jsonschema.validate(instance=data, schema=WINE_QUERY_SCHEMA)
             wine_type = data["type"].lower()
             is_rose = 1 if wine_type == "rose" else 0
             is_sparkling = 1 if wine_type == "sparkling" else 0
@@ -91,6 +102,50 @@ class WineService:
                 scores[wine_id] = 1.0
         
         return scores
+    
+    def get_wine_recommendations(
+        self, 
+        user_preferences: Dict, 
+        neighbor_count: int = 10
+    ) -> Tuple[List[str], Dict[str, float]]:
+        """
+        Get wine recommendations using the Two Tower Model.
+        
+        This method uses the model service to generate a user embedding from preferences,
+        then searches for similar wines using the pre-calculated wine embeddings in the vector index.
+        
+        Args:
+            user_preferences: Dictionary containing user wine preferences
+            neighbor_count: Number of wine recommendations to return
+            
+        Returns:
+            Tuple of (wine_ids, scores) where scores is a dict mapping IDs to similarity scores
+            
+        Raises:
+            ValueError: If model service is not initialized
+            Exception: If embedding generation or vector search fails
+        """
+        if not self.model_service:
+            raise ValueError(
+                "Model service not initialized. Cannot generate user embeddings. "
+                "Use parse_wine_vector for legacy mode or initialize with ModelService."
+            )
+        
+        logger.info("Getting wine recommendations", extra={"preferences": user_preferences})
+        
+        # Generate user embedding using the Two Tower Model
+        user_embedding = self.model_service.generate_user_embedding(user_preferences)
+        
+        logger.info(
+            "User embedding generated, searching for similar wines",
+            extra={"embedding_dim": len(user_embedding)}
+        )
+        
+        # Find similar wines using the user embedding
+        wine_ids, scores = self.find_similar_wines(user_embedding, neighbor_count)
+        
+        logger.info("Wine recommendations retrieved", extra={"count": len(wine_ids)})
+        return wine_ids, scores
     
     def find_similar_wines(self, wine_vector: List[float], neighbor_count: int = 10) -> Tuple[List[str], Dict[str, float]]:
         """

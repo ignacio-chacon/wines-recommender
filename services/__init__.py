@@ -14,5 +14,6 @@
 
 from .wine_service import WineService
 from .ocr_service import OCRService
+from .model_service import ModelService
 
-__all__ = ['WineService', 'OCRService']
+__all__ = ['WineService', 'OCRService', 'ModelService']

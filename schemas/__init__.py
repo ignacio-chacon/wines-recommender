@@ -13,5 +13,19 @@
 # limitations under the License.
 
 from .wine_schema import WINE_SCHEMA
+from .user_schema import (
+    USER_FEATURE_NAMES,
+    USER_FEATURES_SCHEMA,
+    USER_PREFERENCES_SCHEMA, 
+    SIMPLE_USER_PREFERENCES_SCHEMA,
+    WINE_QUERY_SCHEMA
+)
 
-__all__ = ['WINE_SCHEMA']
+__all__ = [
+    'WINE_SCHEMA',
+    'USER_FEATURE_NAMES',
+    'USER_FEATURES_SCHEMA',
+    'USER_PREFERENCES_SCHEMA',
+    'SIMPLE_USER_PREFERENCES_SCHEMA',
+    'WINE_QUERY_SCHEMA'
+]
