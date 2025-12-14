@@ -176,7 +176,10 @@ USER_FEATURES_SCHEMA = {
         "date_range_days": {"type": "number", "minimum": 0, "description": "Days between first and last rating"},
         "avg_days_between_ratings": {"type": "number", "minimum": 0, "description": "Average days between consecutive ratings"},
         "rating_trend": {"type": "number", "description": "Linear trend in ratings over time"},
-        "rating_frequency": {"type": "number", "minimum": 0, "description": "Ratings per day"}
+        "rating_frequency": {"type": "number", "minimum": 0, "description": "Ratings per day"},
+        
+        # Optional contextual information
+        "wine_id": {"type": "number", "description": "Optional wine ID for context (not currently used, reserved for future use)"}
     },
     "required": USER_FEATURE_NAMES,
     "additionalProperties": False

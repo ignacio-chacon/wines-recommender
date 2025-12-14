@@ -196,10 +196,11 @@ curl -X POST http://localhost:8080/wines \
 
 Get personalized wine recommendations using comprehensive user features.
 
-**Request Format** (Flattened JSON with 55 features):
+**Request Format** (Flattened JSON with 55 features + optional wine_id):
 
 ```json
 {
+  "wine_id": 12345,
   "rating_mean": 3.8,
   "rating_std": 0.95,
   "rating_count": 150,
@@ -274,9 +275,66 @@ Get personalized wine recommendations using comprehensive user features.
 **cURL Example**:
 
 ```bash
-curl -X POST http://localhost:8080/wines \
-  -H "Content-Type: application/json" \
-  -d @user_features.json
+curl --location 'https://wines-recommender-438750044055.europe-west1.run.app/wines' \
+--header 'Content-Type: application/json' \
+--data '{
+  "rating_mean": 3.8,
+  "rating_std": 0.95,
+  "rating_count": 150,
+  "rating_min": 1.0,
+  "rating_max": 5.0,
+  "wines_tried": 120,
+  "avg_ratings_per_wine": 1.25,
+  "coefficient_of_variation": 0.25,
+  "red_wine_preference": 4.2,
+  "white_wine_preference": 3.5,
+  "sparkling_wine_preference": 3.8,
+  "rose_wine_preference": 3.3,
+  "dessert_wine_preference": 0.0,
+  "dessert_port_wine_preference": 0.0,
+  "weighted_abv_preference": 13.5,
+  "avg_abv_tried": 13.2,
+  "high_vs_low_abv_preference": 0.3,
+  "very_light_bodied_preference": 0.0,
+  "light_bodied_preference": 3.2,
+  "medium_bodied_preference": 3.8,
+  "full_bodied_preference": 4.1,
+  "very_full_bodied_preference": 3.9,
+  "low_acidity_preference": 3.5,
+  "medium_acidity_preference": 3.9,
+  "high_acidity_preference": 3.6,
+  "country_1_preference": 4.2,
+  "country_2_preference": 3.8,
+  "country_3_preference": 3.6,
+  "country_4_preference": 3.4,
+  "country_5_preference": 3.2,
+  "grape_1_preference": 4.3,
+  "grape_2_preference": 4.0,
+  "grape_3_preference": 3.7,
+  "grape_4_preference": 3.5,
+  "grape_5_preference": 3.4,
+  "complexity_preference": 0.5,
+  "avg_complexity_tried": 2.1,
+  "reserve_preference": 0.3,
+  "grand_preference": 0.2,
+  "high_rating_proportion": 0.65,
+  "low_rating_proportion": 0.08,
+  "rating_entropy": 1.25,
+  "rating_1_proportion": 0.02,
+  "rating_2_proportion": 0.06,
+  "rating_3_proportion": 0.27,
+  "rating_4_proportion": 0.45,
+  "rating_5_proportion": 0.20,
+  "rating_range": 4.0,
+  "rating_variance": 0.9025,
+  "unique_ratings_count": 5,
+  "rating_skewness": -0.35,
+  "date_range_days": 365,
+  "avg_days_between_ratings": 2.43,
+  "rating_trend": 0.001,
+  "rating_frequency": 0.41
+}
+'
 ```
 
 ### POST /wines/legacy (Deprecated)

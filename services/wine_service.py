@@ -109,6 +109,7 @@ class WineService:
     def get_wine_recommendations(
         self, 
         user_preferences: Dict, 
+        wine_id: Optional[str] = None,
         neighbor_count: int = 10
     ) -> Tuple[List[str], Dict[str, float]]:
         """
@@ -119,6 +120,7 @@ class WineService:
         
         Args:
             user_preferences: Dictionary containing user wine preferences
+            wine_id: Optional wine ID for context (not currently used, reserved for future use)
             neighbor_count: Number of wine recommendations to return
             
         Returns:
@@ -134,7 +136,10 @@ class WineService:
                 "Use parse_wine_vector for legacy mode or initialize with ModelService."
             )
         
-        logger.info("Getting wine recommendations", extra={"preferences": user_preferences})
+        logger.info(
+            "Getting wine recommendations", 
+            extra={"preferences": user_preferences, "wine_id": wine_id}
+        )
         
         # Generate user embedding using the Two Tower Model
         user_embedding = self.model_service.generate_user_embedding(user_preferences)

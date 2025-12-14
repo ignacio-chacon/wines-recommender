@@ -34,10 +34,8 @@ def create_wine_routes(wine_service: WineService):
         Get wine recommendations based on user preferences using the Two Tower Model.
         
         Request body should contain:
-        - type: Wine type preference (Red, White, Rose, Sparkling)
-        - body: Body preference score (1-5)
-        - dryness: Dryness preference score (1-5)
-        - abv: Alcohol by volume preference
+        - 55 user preference features (see USER_FEATURE_NAMES)
+        - wine_id: (optional) Wine ID for context
         
         Returns:
             JSON response with wine IDs and similarity scores
@@ -48,9 +46,12 @@ def create_wine_routes(wine_service: WineService):
             return jsonify({"error": "Missing request body."}), 400
         
         try:
+            # Extract optional wine_id from the request
+            wine_id = data.get("wine_id")
+            
             # Use the Two Tower Model approach
-            wine_ids, scores = wine_service.get_wine_recommendations(data)
-            logger.info("Wine recommendations generated", extra={"count": len(wine_ids)})
+            wine_ids, scores = wine_service.get_wine_recommendations(data, wine_id=wine_id)
+            logger.info("Wine recommendations generated", extra={"count": len(wine_ids), "wine_id": wine_id})
             return jsonify({"wines": wine_ids, "scores": scores})
         except ValueError as ve:
             logger.error("User preferences validation failed", extra={"error": str(ve)})
