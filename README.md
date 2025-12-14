@@ -2,7 +2,13 @@
 
 A personalized wine recommendation service using Google Cloud's Two Tower Model architecture with Vector Search, deployed on Cloud Run.
 
-[![Run on Google Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run)
+[![Run on **Request Format** (Flattened JSON with 55 features + optional wine_id):
+
+```json
+{
+  "wine_id": "550e8400-e29b-41d4-a716-446655440000",
+  "rating_mean": 3.8,
+  "rating_std": 0.95,Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run)
 
 ## Table of Contents
 

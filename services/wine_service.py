@@ -43,41 +43,6 @@ class WineService:
         self.model_service = model_service
         logger.info("WineService initialized", extra={"has_model_service": model_service is not None})
     
-    def parse_wine_vector(self, data: Dict) -> List[float]:
-        """
-        Parse and validate wine data, converting it to a feature vector.
-        
-        DEPRECATED: This method is kept for backward compatibility.
-        The new architecture uses user embeddings from the Two Tower Model.
-        
-        Args:
-            data: Dictionary containing wine properties
-            
-        Returns:
-            List of floats representing the wine feature vector
-            
-        Raises:
-            ValueError: If validation fails or data is invalid
-        """
-        try:
-            jsonschema.validate(instance=data, schema=WINE_QUERY_SCHEMA)
-            wine_type = data["type"].lower()
-            is_rose = 1 if wine_type == "rose" else 0
-            is_sparkling = 1 if wine_type == "sparkling" else 0
-            is_white = 1 if wine_type == "white" else 0
-            return [
-                int(data["body"]),
-                float(data["abv"]),
-                is_rose,
-                is_sparkling,
-                is_white,
-                int(data["dryness"])
-            ]
-        except jsonschema.ValidationError as ve:
-            raise ValueError(f"Schema validation error: {ve.message}")
-        except Exception as e:
-            raise ValueError(f"Invalid input: {str(e)}")
-    
     def normalize_distances(self, wine_ids: List[str], distances: List[float]) -> Dict[str, float]:
         """
         Normalize distances to 0-1 scores using min-max normalization.
@@ -130,11 +95,6 @@ class WineService:
             ValueError: If model service is not initialized
             Exception: If embedding generation or vector search fails
         """
-        if not self.model_service:
-            raise ValueError(
-                "Model service not initialized. Cannot generate user embeddings. "
-                "Use parse_wine_vector for legacy mode or initialize with ModelService."
-            )
         
         logger.info(
             "Getting wine recommendations", 
