@@ -202,11 +202,11 @@ curl -X POST http://localhost:8080/wines \
 
 Get personalized wine recommendations using comprehensive user features.
 
-**Request Format** (Flattened JSON with 55 features + optional wine_id):
+**Request Format** (Flattened JSON with 55 features + optional user_id):
 
 ```json
 {
-  "wine_id": 12345,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
   "rating_mean": 3.8,
   "rating_std": 0.95,
   "rating_count": 150,

@@ -74,7 +74,7 @@ class WineService:
     def get_wine_recommendations(
         self, 
         user_preferences: Dict, 
-        wine_id: Optional[str] = None,
+        user_id: Optional[str] = None,
         neighbor_count: int = 10
     ) -> Tuple[List[str], Dict[str, float]]:
         """
@@ -85,7 +85,7 @@ class WineService:
         
         Args:
             user_preferences: Dictionary containing user wine preferences
-            wine_id: Optional wine ID for context (not currently used, reserved for future use)
+            user_id: Optional user ID (GUID) for tracking (not currently used, reserved for future use)
             neighbor_count: Number of wine recommendations to return
             
         Returns:
@@ -98,7 +98,7 @@ class WineService:
         
         logger.info(
             "Getting wine recommendations", 
-            extra={"preferences": user_preferences, "wine_id": wine_id}
+            extra={"preferences": user_preferences, "user_id": user_id}
         )
         
         # Generate user embedding using the Two Tower Model

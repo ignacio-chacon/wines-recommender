@@ -179,7 +179,7 @@ USER_FEATURES_SCHEMA = {
         "rating_frequency": {"type": "number", "minimum": 0, "description": "Ratings per day"},
         
         # Optional contextual information
-        "wine_id": {"type": "string", "description": "Optional wine ID for context (not currently used, reserved for future use)"}
+        "user_id": {"type": "string", "description": "Optional user ID (GUID) for tracking (not currently used, reserved for future use)"}
     },
     "required": USER_FEATURE_NAMES,
     "additionalProperties": False
