@@ -45,30 +45,33 @@ class WineService:
     
     def normalize_distances(self, wine_ids: List[str], distances: List[float]) -> Dict[str, float]:
         """
-        Normalize distances to 0-1 scores using min-max normalization.
-        
+        Convert dot product distances to similarity scores.
+
+        The index uses DOT_PRODUCT_DISTANCE and returns raw dot product values.
+        For normalized embeddings, dot product ranges from -1 to 1, where:
+        - 1.0 = identical vectors (most similar)
+        - 0.0 = orthogonal vectors (unrelated)
+        - -1.0 = opposite vectors (most dissimilar)
+
+        We transform to [0, 1] range using: score = (1 + dot_product) / 2
+
         Args:
             wine_ids: List of wine IDs
-            distances: List of corresponding distances
-            
+            distances: List of dot product values from the vector index
+
         Returns:
-            Dictionary mapping wine IDs to normalized scores
+            Dictionary mapping wine IDs to similarity scores in [0, 1] range
         """
         if not distances:
             return {}
-        
-        min_dist = min(distances)
-        max_dist = max(distances)
+            
         scores = {}
-        
-        if max_dist > min_dist:
-            for wine_id, dist in zip(wine_ids, distances):
-                scores[wine_id] = (dist - min_dist) / (max_dist - min_dist)
-        else:
-            # All distances are the same
-            for wine_id in wine_ids:
-                scores[wine_id] = 1.0
-        
+
+        # Transform dot product [-1, 1] to similarity score [0, 1]
+        # score = (1 + dot_product) / 2
+        for wine_id, dot_product in zip(wine_ids, distances):
+            scores[wine_id] = (1.0 + dot_product) / 2.0
+
         return scores
     
     def get_wine_recommendations(
