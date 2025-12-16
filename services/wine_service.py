@@ -15,7 +15,6 @@
 from typing import Dict, List, Tuple, Optional, TYPE_CHECKING, Any
 import jsonschema
 from google.cloud import aiplatform_v1
-from scipy.special import expit
 
 from schemas import WINE_SCHEMA, WINE_QUERY_SCHEMA
 from config import INDEX_ENDPOINT, DEPLOYED_INDEX_ID
@@ -55,13 +54,13 @@ class WineService:
                 "has_model_service": model_service is not None,
                 "has_embeddings_service": embeddings_service is not None,
                 "model_type": "dot_product",
-                "rating_method": "sigmoid(dot_product) * 4 + 1"
+                "output_format": "raw_dot_products"
             }
         )
     
     def normalize_distances(self, wine_ids: List[str], distances: List[float]) -> Dict[str, float]:
         """
-        Convert dot product distances to ratings in [1, 5] range.
+        Map wine IDs to their dot product distances.
 
         The index uses DOT_PRODUCT_DISTANCE and returns raw dot product values.
         For normalized embeddings, dot product ranges from -1 to 1, where:
@@ -69,88 +68,75 @@ class WineService:
         - 0.0 = orthogonal vectors (unrelated)
         - -1.0 = opposite vectors (most dissimilar)
 
-        We transform to [1, 5] rating range using: rating = sigmoid(dot_product) * 4 + 1
-        This matches the dot product model's training transformation.
+        The backend is responsible for transforming these to final ratings.
 
         Args:
             wine_ids: List of wine IDs
             distances: List of dot product values from the vector index
 
         Returns:
-            Dictionary mapping wine IDs to predicted ratings in [1, 5] range
+            Dictionary mapping wine IDs to dot product values
         """
         if not distances:
             return {}
-            
-        ratings = {}
-        
+
+        dot_products = {}
+
         min_dot = min(distances)
         max_dot = max(distances)
         mean_dot = sum(distances) / len(distances)
         dot_range = max_dot - min_dot
-        
+
         logger.info(
-            "Transforming dot products to ratings",
+            "Mapping wine IDs to dot products",
             extra={
                 "count": len(distances),
                 "min_dot_product": min_dot,
                 "max_dot_product": max_dot,
                 "mean_dot_product": mean_dot,
                 "dot_product_range": dot_range,
-                "raw_dot_products": distances[:10] if len(distances) >= 10 else distances,
-                "transformation": "sigmoid(dot_product) * 4 + 1"
+                "raw_dot_products": distances[:10] if len(distances) >= 10 else distances
             }
         )
 
         for wine_id, dot_product in zip(wine_ids, distances):
-            # Use sigmoid transformation to match model training
-            # sigmoid(dot_product) maps [-1, 1] to [0, 1]
-            # * 4 scales to [0, 4]
-            # + 1 shifts to [1, 5]
-            ratings[wine_id] = expit(dot_product) * 4 + 1
-        
-        min_rating = min(ratings.values())
-        max_rating = max(ratings.values())
-        mean_rating = sum(ratings.values()) / len(ratings)
-        
+            dot_products[wine_id] = dot_product
+
         logger.info(
-            "Rating calculation complete",
+            "Dot product mapping complete",
             extra={
-                "min_rating": min_rating,
-                "max_rating": max_rating,
-                "mean_rating": mean_rating,
-                "rating_range": max_rating - min_rating,
-                "top_5_ratings": sorted(ratings.values(), reverse=True)[:5],
-                "bottom_5_ratings": sorted(ratings.values())[:5] if len(ratings) >= 5 else list(ratings.values())
+                "wines_mapped": len(dot_products),
+                "top_5_dot_products": sorted(dot_products.values(), reverse=True)[:5],
+                "bottom_5_dot_products": sorted(dot_products.values())[:5] if len(dot_products) >= 5 else list(dot_products.values())
             }
         )
 
-        return ratings
+        return dot_products
     
     # Deprecated: compute_ratings_with_similarity_layer method removed
     # The dot product model uses sigmoid(dot_product) * 4 + 1 directly
     # No similarity layer service needed
     
     def get_wine_recommendations(
-        self, 
-        user_preferences: Dict, 
+        self,
+        user_preferences: Dict,
         user_id: Optional[str] = None,
         neighbor_count: int = 10
     ) -> Tuple[List[str], Dict[str, float]]:
         """
         Get wine recommendations using the Two Tower Model.
-        
+
         This method uses the model service to generate a user embedding from preferences,
         then searches for similar wines using the pre-calculated wine embeddings in the vector index.
-        
+
         Args:
             user_preferences: Dictionary containing user wine preferences
             user_id: Optional user ID (GUID) for tracking (not currently used, reserved for future use)
             neighbor_count: Number of wine recommendations to return
-            
+
         Returns:
-            Tuple of (wine_ids, scores) where scores is a dict mapping IDs to similarity scores
-            
+            Tuple of (wine_ids, dot_products) where dot_products is a dict mapping IDs to raw dot product values
+
         Raises:
             ValueError: If model service is not initialized
             Exception: If embedding generation or vector search fails
@@ -170,10 +156,10 @@ class WineService:
         )
         
         # Find similar wines using the user embedding
-        wine_ids, scores = self.find_similar_wines(user_embedding, neighbor_count)
-        
+        wine_ids, dot_products = self.find_similar_wines(user_embedding, neighbor_count)
+
         logger.info("Wine recommendations retrieved", extra={"count": len(wine_ids)})
-        return wine_ids, scores
+        return wine_ids, dot_products
     
     def find_similar_wines(
         self,
@@ -182,19 +168,19 @@ class WineService:
         use_similarity_layer: bool = False  # Deprecated: dot product model doesn't need similarity layer
     ) -> Tuple[List[str], Dict[str, float]]:
         """
-        Find similar wines using vector search and compute ratings.
-        
-        Uses dot product directly with sigmoid transformation to compute ratings in [1, 5] range.
-        This matches the dot product model's training transformation.
-        
+        Find similar wines using vector search and return raw dot products.
+
+        Uses the vector index to find nearest neighbors based on dot product similarity.
+        Returns raw dot product values without transformation.
+
         Args:
             wine_vector: User embedding vector (normalized, 117 dimensions)
             neighbor_count: Number of similar wines to return
             use_similarity_layer: Deprecated parameter (kept for backward compatibility, ignored)
-            
+
         Returns:
-            Tuple of (wine_ids, ratings) where ratings is a dict mapping IDs to ratings in [1, 5] range
-            
+            Tuple of (wine_ids, dot_products) where dot_products is a dict mapping IDs to raw dot product values
+
         Raises:
             Exception: If the vector search fails
         """
@@ -298,11 +284,10 @@ class WineService:
                 "raw_dot_products_sample": distances[:5] if len(distances) >= 5 else distances
             }
         )
-        
-        # Convert dot products to ratings using sigmoid transformation
-        # This matches the model's training: sigmoid(dot_product) * 4 + 1
-        ratings = self.normalize_distances(wine_neighbors, distances)
-        return wine_neighbors, ratings
+
+        # Map wine IDs to raw dot products (backend handles score transformation)
+        dot_products = self.normalize_distances(wine_neighbors, distances)
+        return wine_neighbors, dot_products
 
     def score_wines(
         self,

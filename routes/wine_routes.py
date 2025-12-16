@@ -48,11 +48,11 @@ def create_wine_routes(wine_service: WineService):
         try:
             # Extract optional user_id from the request
             user_id = data.get("user_id")
-            
+
             # Use the Two Tower Model approach
-            wine_ids, scores = wine_service.get_wine_recommendations(data, user_id=user_id)
+            wine_ids, dot_products = wine_service.get_wine_recommendations(data, user_id=user_id)
             logger.info("Wine recommendations generated", extra={"count": len(wine_ids), "user_id": user_id})
-            return jsonify({"wines": wine_ids, "scores": scores})
+            return jsonify({"wines": wine_ids, "dot_products": dot_products})
         except ValueError as ve:
             logger.error("User preferences validation failed", extra={"error": str(ve)})
             return jsonify({"error": str(ve)}), 400
