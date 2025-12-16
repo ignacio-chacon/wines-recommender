@@ -22,7 +22,7 @@ PORT = int(os.getenv("PORT", "8080"))
 # Vertex AI Vector Search Configuration
 API_ENDPOINT = os.getenv(
     "API_ENDPOINT",
-    "1034142878.us-central1-438750044055.vdb.vertexai.goog"
+    "1173956.us-central1-438750044055.vdb.vertexai.goog"
 )
 INDEX_ENDPOINT = os.getenv(
     "INDEX_ENDPOINT",
