@@ -182,11 +182,23 @@ class ModelService:
                 else:
                     raise Exception(f"Unexpected embedding format: {type(embedding)}")
                 
+                import numpy as np
+                
+                embedding_norm = np.linalg.norm(user_embedding)
+                embedding_min = min(user_embedding)
+                embedding_max = max(user_embedding)
+                embedding_mean = sum(user_embedding) / len(user_embedding)
+                
                 logger.info(
                     "User embedding generated successfully", 
                     extra={
                         "embedding_dim": len(user_embedding),
-                        "input_features": len(feature_vector)
+                        "input_features": len(feature_vector),
+                        "embedding_norm": embedding_norm,
+                        "embedding_min": embedding_min,
+                        "embedding_max": embedding_max,
+                        "embedding_mean": embedding_mean,
+                        "is_normalized": abs(embedding_norm - 1.0) < 0.01
                     }
                 )
                 return user_embedding

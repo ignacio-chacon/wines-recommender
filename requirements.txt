@@ -8,3 +8,6 @@ google-auth==2.3.2
 google-cloud-aiplatform
 google-cloud-vision
 jsonschema
+torch>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
