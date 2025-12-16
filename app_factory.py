@@ -16,7 +16,7 @@ from flask import Flask
 from google.cloud import aiplatform_v1
 
 import config
-from services import WineService, OCRService, ModelService
+from services import WineService, OCRService, ModelService, EmbeddingsService
 from routes.wine_routes import create_wine_routes
 from routes.ocr_routes import create_ocr_routes
 from utils.logging import logger
@@ -55,11 +55,25 @@ def create_app() -> Flask:
             )
     else:
         logger.info("Model endpoint not configured, running in legacy mode")
-    
+
+    # Initialize Embeddings Service for wine scoring
+    embeddings_service = None
+    try:
+        embeddings_service = EmbeddingsService()
+        logger.info("Embeddings service initialized", extra={"wine_count": embeddings_service.get_total_count()})
+    except Exception as e:
+        logger.warning(
+            "Failed to initialize Embeddings service, wine scoring will not be available",
+            extra={"error": str(e)}
+        )
+
     # Initialize services
-    wine_service = WineService(vector_search_client, model_service)
+    wine_service = WineService(vector_search_client, model_service, embeddings_service)
     ocr_service = OCRService()
-    logger.info("Services initialized", extra={"model_enabled": model_service is not None})
+    logger.info("Services initialized", extra={
+        "model_enabled": model_service is not None,
+        "embeddings_enabled": embeddings_service is not None
+    })
     
     # Register blueprints with dependency injection
     app.register_blueprint(create_wine_routes(wine_service))

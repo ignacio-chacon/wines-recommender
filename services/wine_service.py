@@ -23,30 +23,37 @@ from utils.logging import logger
 
 if TYPE_CHECKING:
     from services.model_service import ModelService
+    from services.embeddings_service import EmbeddingsService
 
 
 class WineService:
     """Service for wine vector search and recommendation using pre-calculated wine embeddings."""
-    
+
     def __init__(
-        self, 
+        self,
         vector_search_client: aiplatform_v1.MatchServiceClient,
         model_service: Optional['ModelService'] = None,
+        embeddings_service: Optional['EmbeddingsService'] = None,
+        similarity_service: Optional[Any] = None  # Deprecated: not used with dot product model
     ):
         """
         Initialize the wine service.
-        
+
         Args:
             vector_search_client: Initialized Vertex AI Match Service client
             model_service: Optional ModelService for generating user embeddings
+            embeddings_service: Optional EmbeddingsService for scoring specific wines
             similarity_service: Deprecated parameter (kept for backward compatibility, ignored)
         """
         self.vector_search_client = vector_search_client
         self.model_service = model_service
+        self.embeddings_service = embeddings_service
+        # similarity_service is deprecated - dot product model doesn't need it
         logger.info(
             "WineService initialized",
             extra={
                 "has_model_service": model_service is not None,
+                "has_embeddings_service": embeddings_service is not None,
                 "model_type": "dot_product",
                 "rating_method": "sigmoid(dot_product) * 4 + 1"
             }
@@ -225,14 +232,64 @@ class WineService:
             return_full_datapoint=False,  # Not needed for dot product model
         )
         
-        response = self.vector_search_client.find_neighbors(request_obj)
+        try:
+            response = self.vector_search_client.find_neighbors(request_obj)
+        except Exception as e:
+            logger.error(
+                "Vector search failed",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "index_endpoint": INDEX_ENDPOINT,
+                    "deployed_index_id": DEPLOYED_INDEX_ID
+                }
+            )
+            raise
+
+        # Log response structure for debugging
+        logger.info(
+            "Vector search response received",
+            extra={
+                "has_nearest_neighbors": hasattr(response, 'nearest_neighbors'),
+                "nearest_neighbors_count": len(response.nearest_neighbors) if hasattr(response, 'nearest_neighbors') else 0,
+                "response_type": type(response).__name__
+            }
+        )
+
+        if not response.nearest_neighbors or len(response.nearest_neighbors) == 0:
+            logger.warning("Vector search returned no neighbors")
+            return [], {}
+
+        # Check if the first query result has neighbors
+        first_result = response.nearest_neighbors[0]
+        neighbor_count = len(first_result.neighbors) if hasattr(first_result, 'neighbors') else 0
+
+        logger.info(
+            "Vector search first result",
+            extra={
+                "neighbor_count": neighbor_count,
+                "has_neighbors_attr": hasattr(first_result, 'neighbors')
+            }
+        )
+
+        if not first_result.neighbors or neighbor_count == 0:
+            logger.warning("Vector search returned empty neighbor list")
+            return [], {}
+
         wine_neighbors = []
         distances = []
-        
-        for neighbor in response.nearest_neighbors[0].neighbors:
-            datapoint_id = neighbor.datapoint.datapoint_id
-            wine_neighbors.append(datapoint_id)
-            distances.append(neighbor.distance)  # This is the dot product
+
+        try:
+            for neighbor in response.nearest_neighbors[0].neighbors:
+                datapoint_id = neighbor.datapoint.datapoint_id
+                wine_neighbors.append(datapoint_id)
+                distances.append(neighbor.distance)  # This is the dot product
+        except Exception as e:
+            logger.error(
+                "Error processing vector search results",
+                extra={"error": str(e), "error_type": type(e).__name__}
+            )
+            raise
         
         logger.info(
             "Vector search completed",
@@ -246,3 +303,68 @@ class WineService:
         # This matches the model's training: sigmoid(dot_product) * 4 + 1
         ratings = self.normalize_distances(wine_neighbors, distances)
         return wine_neighbors, ratings
+
+    def score_wines(
+        self,
+        user_embedding: List[float],
+        wine_ids: List[str]
+    ) -> Dict[str, float]:
+        """
+        Calculate dot products for specific wines using O(1) lookup.
+
+        This method retrieves wine embeddings from the embeddings service and
+        calculates dot products between user and wine embeddings. The backend
+        is responsible for transforming these to final scores/ratings.
+
+        Args:
+            user_embedding: User embedding vector (117 dimensions)
+            wine_ids: List of wine IDs to score
+
+        Returns:
+            Dictionary mapping wine IDs to dot product values (typically in [-1, 1] range for normalized vectors)
+
+        Raises:
+            ValueError: If embeddings service is not initialized
+        """
+        if not self.embeddings_service:
+            raise ValueError("Embeddings service not initialized")
+
+        import numpy as np
+
+        logger.info(
+            "Calculating dot products for specific wines",
+            extra={
+                "wine_count": len(wine_ids),
+                "user_embedding_dim": len(user_embedding)
+            }
+        )
+
+        # Load wine embeddings (O(1) per wine)
+        wine_embeddings = self.embeddings_service.get_embeddings(wine_ids)
+
+        if not wine_embeddings:
+            logger.warning("No wine embeddings found for provided IDs")
+            return {}
+
+        # Calculate dot products
+        dot_products = {}
+        user_vec = np.array(user_embedding)
+
+        for wine_id, wine_embedding in wine_embeddings.items():
+            wine_vec = np.array(wine_embedding)
+            # Calculate dot product
+            dot_product = float(np.dot(user_vec, wine_vec))
+            dot_products[wine_id] = dot_product
+
+        logger.info(
+            "Dot product calculation complete",
+            extra={
+                "wines_requested": len(wine_ids),
+                "wines_calculated": len(dot_products),
+                "wines_not_found": len(wine_ids) - len(dot_products),
+                "dot_products_range": [min(dot_products.values()), max(dot_products.values())] if dot_products else [0, 0],
+                "mean_dot_product": sum(dot_products.values()) / len(dot_products) if dot_products else 0
+            }
+        )
+
+        return dot_products
