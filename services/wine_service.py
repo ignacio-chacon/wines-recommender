@@ -335,11 +335,43 @@ class WineService:
         dot_products = {}
         user_vec = np.array(user_embedding)
 
+        # Log user vector stats
+        user_norm = np.linalg.norm(user_vec)
+        logger.info(
+            "User vector stats for scoring",
+            extra={
+                "user_norm": float(user_norm),
+                "user_min": float(np.min(user_vec)),
+                "user_max": float(np.max(user_vec)),
+                "user_mean": float(np.mean(user_vec)),
+                "user_std": float(np.std(user_vec))
+            }
+        )
+
+        wine_norms = []
         for wine_id, wine_embedding in wine_embeddings.items():
             wine_vec = np.array(wine_embedding)
+            wine_norm = np.linalg.norm(wine_vec)
+            wine_norms.append(wine_norm)
+
             # Calculate dot product
             dot_product = float(np.dot(user_vec, wine_vec))
             dot_products[wine_id] = dot_product
+
+            # Log first wine in detail
+            if len(dot_products) == 1:
+                logger.info(
+                    "First wine vector stats",
+                    extra={
+                        "wine_id": wine_id,
+                        "wine_norm": float(wine_norm),
+                        "wine_min": float(np.min(wine_vec)),
+                        "wine_max": float(np.max(wine_vec)),
+                        "wine_mean": float(np.mean(wine_vec)),
+                        "wine_std": float(np.std(wine_vec)),
+                        "dot_product": dot_product
+                    }
+                )
 
         logger.info(
             "Dot product calculation complete",
@@ -348,7 +380,9 @@ class WineService:
                 "wines_calculated": len(dot_products),
                 "wines_not_found": len(wine_ids) - len(dot_products),
                 "dot_products_range": [min(dot_products.values()), max(dot_products.values())] if dot_products else [0, 0],
-                "mean_dot_product": sum(dot_products.values()) / len(dot_products) if dot_products else 0
+                "mean_dot_product": sum(dot_products.values()) / len(dot_products) if dot_products else 0,
+                "wine_norms_range": [min(wine_norms), max(wine_norms)] if wine_norms else [0, 0],
+                "mean_wine_norm": sum(wine_norms) / len(wine_norms) if wine_norms else 0
             }
         )
 

@@ -111,15 +111,43 @@ def create_wine_routes(wine_service: WineService):
             return jsonify({"error": "Missing wine_ids"}), 400
 
         try:
+            logger.info(
+                "Scoring wines - generating user embedding",
+                extra={"user_id": user_id, "wine_ids": wine_ids, "wine_count": len(wine_ids)}
+            )
+
             # Generate user embedding
             user_embedding = wine_service.model_service.generate_user_embedding(user_data)
+
+            import numpy as np
+            user_norm = np.linalg.norm(user_embedding)
+            logger.info(
+                "User embedding generated for scoring",
+                extra={
+                    "embedding_dim": len(user_embedding),
+                    "embedding_norm": float(user_norm),
+                    "embedding_min": float(min(user_embedding)),
+                    "embedding_max": float(max(user_embedding)),
+                    "embedding_mean": float(np.mean(user_embedding)),
+                    "is_normalized": abs(user_norm - 1.0) < 0.01,
+                    "user_id": user_id
+                }
+            )
 
             # Calculate dot products for specific wines
             dot_products = wine_service.score_wines(user_embedding, wine_ids)
 
             logger.info(
                 "Dot products calculated successfully",
-                extra={"wine_count": len(wine_ids), "results_returned": len(dot_products), "user_id": user_id}
+                extra={
+                    "wine_count": len(wine_ids),
+                    "results_returned": len(dot_products),
+                    "dot_products_sample": {k: v for k, v in list(dot_products.items())[:5]},
+                    "dot_product_min": min(dot_products.values()) if dot_products else None,
+                    "dot_product_max": max(dot_products.values()) if dot_products else None,
+                    "dot_product_mean": sum(dot_products.values()) / len(dot_products) if dot_products else None,
+                    "user_id": user_id
+                }
             )
             return jsonify({"dot_products": dot_products})
 
