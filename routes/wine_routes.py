@@ -33,10 +33,12 @@ def create_wine_routes(wine_service: WineService):
         """
         Get wine recommendations based on user preferences using the Two Tower Model.
         
+        Query parameters:
+        - limit: (optional) Number of wine recommendations to return (default: 10, max: 1000)
+        
         Request body should contain:
         - 55 user preference features (see USER_FEATURE_NAMES)
         - user_id: (optional) User ID (GUID) for tracking
-        - limit: (optional) Number of wine recommendations to return (default: 10, max: 1000)
         
         Returns:
             JSON response with wine IDs and similarity scores
@@ -47,19 +49,15 @@ def create_wine_routes(wine_service: WineService):
             return jsonify({"error": "Missing request body."}), 400
         
         try:
-            # Extract optional user_id from the request
+            # Extract optional user_id from the request body
             user_id = data.get("user_id")
             
-            # Extract optional limit parameter (default: 10, max: 1000)
-            limit = data.get("limit", 10)
-            try:
-                limit = int(limit)
-                if limit < 1:
-                    return jsonify({"error": "limit must be at least 1"}), 400
-                if limit > 1000:
-                    return jsonify({"error": "limit cannot exceed 1000"}), 400
-            except (TypeError, ValueError):
-                return jsonify({"error": "limit must be a valid integer"}), 400
+            # Extract optional limit parameter from query string (default: 10, max: 1000)
+            limit = request.args.get("limit", default=10, type=int)
+            if limit < 1:
+                return jsonify({"error": "limit must be at least 1"}), 400
+            if limit > 1000:
+                return jsonify({"error": "limit cannot exceed 1000"}), 400
 
             # Use the Two Tower Model approach
             wine_ids, dot_products = wine_service.get_wine_recommendations(
