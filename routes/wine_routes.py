@@ -36,6 +36,7 @@ def create_wine_routes(wine_service: WineService):
         Request body should contain:
         - 55 user preference features (see USER_FEATURE_NAMES)
         - user_id: (optional) User ID (GUID) for tracking
+        - limit: (optional) Number of wine recommendations to return (default: 10, max: 1000)
         
         Returns:
             JSON response with wine IDs and similarity scores
@@ -48,10 +49,28 @@ def create_wine_routes(wine_service: WineService):
         try:
             # Extract optional user_id from the request
             user_id = data.get("user_id")
+            
+            # Extract optional limit parameter (default: 10, max: 1000)
+            limit = data.get("limit", 10)
+            try:
+                limit = int(limit)
+                if limit < 1:
+                    return jsonify({"error": "limit must be at least 1"}), 400
+                if limit > 1000:
+                    return jsonify({"error": "limit cannot exceed 1000"}), 400
+            except (TypeError, ValueError):
+                return jsonify({"error": "limit must be a valid integer"}), 400
 
             # Use the Two Tower Model approach
-            wine_ids, dot_products = wine_service.get_wine_recommendations(data, user_id=user_id)
-            logger.info("Wine recommendations generated", extra={"count": len(wine_ids), "user_id": user_id})
+            wine_ids, dot_products = wine_service.get_wine_recommendations(
+                data, 
+                user_id=user_id, 
+                neighbor_count=limit
+            )
+            logger.info(
+                "Wine recommendations generated", 
+                extra={"count": len(wine_ids), "user_id": user_id, "limit": limit}
+            )
             return jsonify({"wines": wine_ids, "dot_products": dot_products})
         except ValueError as ve:
             logger.error("User preferences validation failed", extra={"error": str(ve)})
